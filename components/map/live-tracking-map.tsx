@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
-import { Layers, Navigation, ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
+import { Layers, Navigation, ZoomIn, ZoomOut, Maximize2, Shield, Radio, Truck, Warehouse, Sprout } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export interface MapMarkerItem {
@@ -31,7 +31,7 @@ export interface GeofenceZone {
 interface LiveTrackingMapProps {
   markers?: MapMarkerItem[];
   geofences?: GeofenceZone[];
-  routePath?: [number, number][];
+  routePath?: [number, number][]; // [lat, lng] pairs
   activeMarkerId?: string;
   onSelectMarker?: (marker: MapMarkerItem) => void;
   className?: string;
@@ -47,324 +47,468 @@ export function LiveTrackingMap({
   className,
   height = '500px',
 }: LiveTrackingMapProps) {
-  const mapContainer = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<any>(null);
-  const markersRef = useRef<any[]>([]);
-  const popupRef = useRef<any>(null);
-  const [mapLoaded, setMapLoaded] = useState(false);
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const leafletMapRef = useRef<any>(null);
+  const leafletLibRef = useRef<any>(null);
+  const markerLayersRef = useRef<any[]>([]);
+  const geofenceLayersRef = useRef<any[]>([]);
+  const routePolylineRef = useRef<any>(null);
+
+  const [mapReady, setMapReady] = useState(false);
   const [showGeofences, setShowGeofences] = useState(true);
   const [showPath, setShowPath] = useState(true);
-  const [selectedMarker, setSelectedMarker] = useState<MapMarkerItem | null>(null);
+  const [mapStyle, setMapStyle] = useState<'voyager' | 'osm'>('voyager');
 
-  const mapboxToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || '';
-
-  const defaultCenter = useMemo(() => {
+  // Center on active marker or default to Pakistan central geography
+  const defaultCenter = useMemo<[number, number]>(() => {
     if (activeMarkerId) {
       const active = markers.find((m) => m.id === activeMarkerId);
-      if (active) return [active.longitude, active.latitude] as [number, number];
+      if (active && typeof active.latitude === 'number' && typeof active.longitude === 'number') {
+        return [active.latitude, active.longitude];
+      }
     }
-    // Default: Pakistan center
-    return [69.3451, 30.3753] as [number, number];
+    // Default: Central Pakistan view (covering Punjab, Sindh, Motorway corridor)
+    return [30.8, 72.5];
   }, [activeMarkerId, markers]);
 
+  // Tile layer URLs (100% free, zero token required)
+  const tileLayers = {
+    voyager: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+    osm: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+  };
+
+  const tileAttribution = {
+    voyager: '&copy; <a href="https://carto.com/">CARTO</a> &copy; <a href="https://openstreetmap.org">OSM</a>',
+    osm: '&copy; <a href="https://openstreetmap.org">OpenStreetMap</a> contributors',
+  };
+
+  // 1. Initialize Leaflet Map
   useEffect(() => {
-    if (!mapContainer.current || mapRef.current) return;
+    let isCancelled = false;
 
-    const initMap = async () => {
+    const initLeaflet = async () => {
+      if (!mapContainerRef.current || leafletMapRef.current) return;
+
       try {
-        const mapboxgl = (await import('mapbox-gl')).default;
+        const L = (await import('leaflet')).default;
+        if (isCancelled || !mapContainerRef.current) return;
+        leafletLibRef.current = L;
 
-        if (!mapboxToken) {
-          console.warn('Mapbox token not found');
-          setMapLoaded(true);
-          return;
+        // Ensure container is clean
+        const container = mapContainerRef.current;
+        if ((container as any)._leaflet_id) {
+          (container as any)._leaflet_id = null;
         }
 
-        mapboxgl.accessToken = mapboxToken;
-
-        const map = new mapboxgl.Map({
-          container: mapContainer.current!,
-          style: 'mapbox://styles/mapbox/light-v11',
+        const map = L.map(container, {
           center: defaultCenter,
-          zoom: 6,
+          zoom: 6.5,
+          zoomControl: false,
           attributionControl: false,
         });
 
-        map.addControl(new mapboxgl.AttributionControl({ compact: true }), 'bottom-right');
+        // Add sleek attribution
+        L.control.attribution({ position: 'bottomright', prefix: false }).addTo(map);
 
-        map.on('load', () => {
-          mapRef.current = map;
-          setMapLoaded(true);
-          updateMapData(map, mapboxgl);
-        });
+        // Add base tile layer
+        const tileLayer = L.tileLayer(tileLayers[mapStyle], {
+          attribution: tileAttribution[mapStyle],
+          maxZoom: 19,
+          subdomains: 'abcd',
+        }).addTo(map);
 
+        (map as any)._activeTileLayer = tileLayer;
+        leafletMapRef.current = map;
+
+        // Invalidate size to ensure crisp rendering
+        setTimeout(() => {
+          if (leafletMapRef.current) {
+            leafletMapRef.current.invalidateSize();
+          }
+          setMapReady(true);
+        }, 150);
       } catch (err) {
-        console.error('Mapbox init error:', err);
-        setMapLoaded(true);
+        console.error('Error initializing Leaflet map:', err);
       }
     };
 
-    initMap();
+    initLeaflet();
 
     return () => {
-      if (mapRef.current) {
-        mapRef.current.remove();
-        mapRef.current = null;
+      isCancelled = true;
+      if (leafletMapRef.current) {
+        leafletMapRef.current.remove();
+        leafletMapRef.current = null;
       }
+      setMapReady(false);
     };
   }, []);
 
-  const updateMapData = async (map: any, mapboxgl: any) => {
-    // Clear existing markers
-    markersRef.current.forEach(m => m.remove());
-    markersRef.current = [];
+  // 2. Handle map style changes
+  useEffect(() => {
+    const map = leafletMapRef.current;
+    const L = leafletLibRef.current;
+    if (!map || !L) return;
 
-    // Add markers
+    if (map._activeTileLayer) {
+      map.removeLayer(map._activeTileLayer);
+    }
+
+    const newLayer = L.tileLayer(tileLayers[mapStyle], {
+      attribution: tileAttribution[mapStyle],
+      maxZoom: 19,
+      subdomains: 'abcd',
+    }).addTo(map);
+
+    map._activeTileLayer = newLayer;
+  }, [mapStyle]);
+
+  // 3. Update Markers, Geofences, and Route Polyline
+  const renderMapLayers = useCallback(() => {
+    const map = leafletMapRef.current;
+    const L = leafletLibRef.current;
+    if (!map || !L) return;
+
+    // --- A. CLEAR OLD LAYERS ---
+    markerLayersRef.current.forEach((m) => m.remove());
+    markerLayersRef.current = [];
+
+    geofenceLayersRef.current.forEach((g) => g.remove());
+    geofenceLayersRef.current = [];
+
+    if (routePolylineRef.current) {
+      routePolylineRef.current.remove();
+      routePolylineRef.current = null;
+    }
+
+    // --- B. RENDER GEOFENCES ---
+    if (showGeofences && geofences.length > 0) {
+      geofences.forEach((geo) => {
+        const isFarm = geo.type === 'FARM';
+        const circle = L.circle([geo.latitude, geo.longitude], {
+          radius: geo.radius,
+          color: isFarm ? '#059669' : '#0284c7',
+          fillColor: isFarm ? '#10b981' : '#38bdf8',
+          fillOpacity: 0.15,
+          weight: 2,
+          dashArray: '4, 4',
+        }).addTo(map);
+
+        circle.bindTooltip(`📍 Geofence: ${geo.name} (${Math.round(geo.radius / 1000)}km)`, {
+          permanent: false,
+          direction: 'top',
+          className: 'bg-white text-slate-800 text-xs px-2 py-1 rounded shadow-md border font-semibold',
+        });
+
+        geofenceLayersRef.current.push(circle);
+      });
+    }
+
+    // --- C. RENDER ROUTE TRAIL ---
+    if (showPath && routePath.length > 1) {
+      // Glow background line
+      const glowLine = L.polyline(routePath, {
+        color: '#38bdf8',
+        weight: 6,
+        opacity: 0.4,
+        lineCap: 'round',
+        lineJoin: 'round',
+      }).addTo(map);
+
+      // Core route line
+      const coreLine = L.polyline(routePath, {
+        color: '#0284c7',
+        weight: 3.5,
+        opacity: 0.9,
+        lineCap: 'round',
+        lineJoin: 'round',
+      }).addTo(map);
+
+      routePolylineRef.current = L.featureGroup([glowLine, coreLine]);
+    }
+
+    // --- D. RENDER MARKERS ---
     markers.forEach((marker) => {
-      const el = document.createElement('div');
-      el.className = 'mapbox-custom-marker';
-      
-      const isAlert = marker.type === 'VEHICLE' && typeof marker.temperature === 'number' && (marker.temperature > 8 || marker.temperature < 0);
-      
-      let bgColor = '#15803d'; // Farm green
+      const isVehicle = marker.type === 'VEHICLE';
+      const isAlert =
+        isVehicle &&
+        typeof marker.temperature === 'number' &&
+        (marker.temperature > 8 || marker.temperature < 0);
+
+      let pinColor = '#15803d'; // Farm
       let emoji = '🌾';
-      if (marker.type === 'VEHICLE') {
-        bgColor = isAlert ? '#ef4444' : '#0f172a';
+
+      if (isVehicle) {
+        pinColor = isAlert ? '#ef4444' : '#0f172a';
         emoji = '🚛';
       } else if (marker.type === 'WAREHOUSE') {
-        bgColor = '#0284c7';
+        pinColor = '#0284c7';
         emoji = '🏭';
       }
 
-      el.innerHTML = `
-        <div style="
-          width: 36px; height: 36px; 
-          background: ${bgColor}; 
-          border-radius: 50% 50% 50% 0;
-          transform: rotate(-45deg);
-          display: flex; align-items: center; justify-content: center;
-          box-shadow: 0 3px 10px rgba(0,0,0,0.3);
-          border: 2px solid white;
-          cursor: pointer;
-          transition: transform 0.2s;
-          ${isAlert ? 'animation: pulse-ring 1.5s ease-out infinite;' : ''}
-        ">
-          <span style="transform: rotate(45deg); font-size: 16px;">${emoji}</span>
-        </div>
-      `;
+      const pulseStyle = isAlert ? 'animation: pulse-ring 1.5s ease-out infinite;' : '';
 
-      el.addEventListener('mouseenter', () => {
-        el.querySelector('div')!.style.transform = 'rotate(-45deg) scale(1.15)';
-      });
-      el.addEventListener('mouseleave', () => {
-        el.querySelector('div')!.style.transform = 'rotate(-45deg) scale(1)';
-      });
-
-      // Popup content
-      const popupHtml = `
-        <div style="font-family: Inter, system-ui, sans-serif; min-width: 200px; padding: 12px;">
-          <div style="font-size: 14px; font-weight: 700; color: #0f172a; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
-            ${emoji} ${marker.name}
+      const markerHtml = `
+        <div style="position: relative; width: 38px; height: 38px; display: flex; align-items: center; justify-content: center; cursor: pointer;">
+          <div style="
+            width: 36px; height: 36px;
+            background: ${pinColor};
+            border-radius: 50% 50% 50% 0;
+            transform: rotate(-45deg);
+            display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.35);
+            border: 2.5px solid #ffffff;
+            transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+            ${pulseStyle}
+          ">
+            <span style="transform: rotate(45deg); font-size: 16px; user-select: none;">${emoji}</span>
           </div>
-          ${marker.code ? `<div style="font-size: 11px; color: #64748b; margin-bottom: 4px;">Ref: <b style="color: #334155">${marker.code}</b></div>` : ''}
-          ${typeof marker.temperature === 'number' ? `
-            <div style="
-              margin-top: 6px; font-weight: 700; padding: 6px 10px; border-radius: 8px; font-size: 12px;
-              background: ${marker.temperature > 8 ? '#fef2f2' : '#f0fdf4'}; 
-              color: ${marker.temperature > 8 ? '#b91c1c' : '#166534'};
-              border: 1px solid ${marker.temperature > 8 ? '#fecaca' : '#bbf7d0'};
-            ">
-              🌡️ Temp: ${marker.temperature > 0 ? '+' : ''}${marker.temperature.toFixed(1)}°C
-            </div>
-          ` : ''}
-          ${typeof marker.speed === 'number' && marker.speed > 0 ? `
-            <div style="color: #0369a1; margin-top: 6px; font-weight: 600; font-size: 12px;">⚡ Speed: ${marker.speed} km/h</div>
-          ` : ''}
-          ${marker.status ? `
-            <div style="margin-top: 6px; display: inline-block; padding: 2px 8px; border-radius: 6px; background: #f1f5f9; font-size: 10px; font-weight: 700; color: #475569; border: 1px solid #e2e8f0;">
-              ${marker.status}
-            </div>
-          ` : ''}
-          ${marker.driverName ? `<div style="font-size: 11px; color: #64748b; margin-top: 4px;">👤 ${marker.driverName}</div>` : ''}
+          ${
+            typeof marker.temperature === 'number'
+              ? `<div style="
+                  position: absolute; top: -8px; right: -8px;
+                  background: ${isAlert ? '#dc2626' : '#166534'};
+                  color: #ffffff;
+                  font-family: Inter, sans-serif;
+                  font-size: 9px;
+                  font-weight: 800;
+                  padding: 1px 5px;
+                  border-radius: 9999px;
+                  border: 1.5px solid #ffffff;
+                  box-shadow: 0 1px 4px rgba(0,0,0,0.25);
+                  white-space: nowrap;
+                ">
+                  ${marker.temperature > 0 ? '+' : ''}${marker.temperature.toFixed(1)}°
+                </div>`
+              : ''
+          }
         </div>
       `;
 
-      const popup = new mapboxgl.Popup({ offset: 25, closeButton: true, maxWidth: '280px' })
-        .setHTML(popupHtml);
+      const customIcon = L.divIcon({
+        className: 'custom-leaflet-marker',
+        html: markerHtml,
+        iconSize: [38, 38],
+        iconAnchor: [19, 36],
+        popupAnchor: [0, -34],
+      });
 
-      const mapMarker = new mapboxgl.Marker(el)
-        .setLngLat([marker.longitude, marker.latitude])
-        .setPopup(popup)
-        .addTo(map);
+      const leafletMarker = L.marker([marker.latitude, marker.longitude], { icon: customIcon });
 
-      el.addEventListener('click', () => {
-        setSelectedMarker(marker);
+      // Rich formatted popup
+      const popupHtml = `
+        <div style="min-width: 210px; padding: 12px; font-family: Inter, system-ui, sans-serif;">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+            <span style="font-size: 11px; font-weight: 800; text-transform: uppercase; color: ${
+              isAlert ? '#dc2626' : '#047857'
+            }; letter-spacing: 0.05em;">
+              ${marker.type}
+            </span>
+            ${
+              marker.status
+                ? `<span style="font-size: 10px; font-weight: 700; background: #f1f5f9; color: #334155; padding: 2px 6px; border-radius: 4px; border: 1px solid #e2e8f0;">
+                    ${marker.status}
+                  </span>`
+                : ''
+            }
+          </div>
+
+          <h4 style="font-size: 14px; font-weight: 800; color: #0f172a; margin: 0 0 4px 0; line-height: 1.3;">
+            ${emoji} ${marker.name}
+          </h4>
+
+          ${
+            marker.code
+              ? `<div style="font-size: 11px; color: #64748b; margin-bottom: 6px;">Reference: <strong style="color: #1e293b;">${marker.code}</strong></div>`
+              : ''
+          }
+
+          ${
+            marker.cropType
+              ? `<div style="font-size: 11px; color: #059669; font-weight: 600; margin-bottom: 6px;">🌿 ${marker.cropType}</div>`
+              : ''
+          }
+
+          <div style="margin-top: 8px; display: grid; grid-template-columns: 1fr 1fr; gap: 6px;">
+            ${
+              typeof marker.temperature === 'number'
+                ? `<div style="
+                    background: ${isAlert ? '#fef2f2' : '#f0fdf4'};
+                    border: 1px solid ${isAlert ? '#fecaca' : '#bbf7d0'};
+                    border-radius: 8px;
+                    padding: 6px 8px;
+                    text-align: center;
+                  ">
+                    <span style="font-size: 9px; font-weight: 700; color: ${isAlert ? '#991b1b' : '#166534'}; text-transform: uppercase; display: block;">Reefer Temp</span>
+                    <strong style="font-size: 13px; color: ${isAlert ? '#dc2626' : '#15803d'};">
+                      ${marker.temperature > 0 ? '+' : ''}${marker.temperature.toFixed(1)}°C
+                    </strong>
+                  </div>`
+                : ''
+            }
+
+            ${
+              typeof marker.speed === 'number'
+                ? `<div style="
+                    background: #f8fafc;
+                    border: 1px solid #e2e8f0;
+                    border-radius: 8px;
+                    padding: 6px 8px;
+                    text-align: center;
+                  ">
+                    <span style="font-size: 9px; font-weight: 700; color: #64748b; text-transform: uppercase; display: block;">GPS Speed</span>
+                    <strong style="font-size: 13px; color: #0284c7;">
+                      ${marker.speed} km/h
+                    </strong>
+                  </div>`
+                : ''
+            }
+          </div>
+
+          ${
+            marker.driverName
+              ? `<div style="margin-top: 8px; padding-top: 6px; border-top: 1px solid #f1f5f9; font-size: 11px; color: #475569; display: flex; align-items: center; gap: 4px;">
+                  <span>👤</span>
+                  <span>Driver: <strong>${marker.driverName}</strong></span>
+                </div>`
+              : ''
+          }
+        </div>
+      `;
+
+      leafletMarker.bindPopup(popupHtml, {
+        maxWidth: 280,
+        className: 'custom-leaflet-popup',
+      });
+
+      leafletMarker.on('click', () => {
         if (onSelectMarker) onSelectMarker(marker);
       });
 
-      markersRef.current.push(mapMarker);
+      leafletMarker.addTo(map);
+      markerLayersRef.current.push(leafletMarker);
     });
+  }, [markers, geofences, routePath, showGeofences, showPath, onSelectMarker]);
 
-    // Add route polyline
-    if (routePath.length > 1) {
-      if (map.getSource('route')) {
-        map.removeLayer('route-line');
-        map.removeSource('route');
-      }
-      map.addSource('route', {
-        type: 'geojson',
-        data: {
-          type: 'Feature',
-          properties: {},
-          geometry: {
-            type: 'LineString',
-            coordinates: routePath.map(p => [p[1], p[0]]),
-          },
-        },
-      });
-      map.addLayer({
-        id: 'route-line',
-        type: 'line',
-        source: 'route',
-        layout: { 'line-join': 'round', 'line-cap': 'round' },
-        paint: {
-          'line-color': '#0ea5e9',
-          'line-width': 4,
-          'line-opacity': 0.8,
-        },
-      });
-    }
-
-    // Add geofence circles
-    geofences.forEach((geo, idx) => {
-      const sourceId = `geofence-${idx}`;
-      if (map.getSource(sourceId)) {
-        map.removeLayer(`${sourceId}-fill`);
-        map.removeLayer(`${sourceId}-outline`);
-        map.removeSource(sourceId);
-      }
-
-      // Approximate circle with 64-point polygon
-      const points = 64;
-      const coords = [];
-      for (let i = 0; i < points; i++) {
-        const angle = (i / points) * (2 * Math.PI);
-        const dx = (geo.radius / 111320) * Math.cos(angle);
-        const dy = (geo.radius / (111320 * Math.cos(geo.latitude * Math.PI / 180))) * Math.sin(angle);
-        coords.push([geo.longitude + dy, geo.latitude + dx]);
-      }
-      coords.push(coords[0]); // close polygon
-
-      map.addSource(sourceId, {
-        type: 'geojson',
-        data: {
-          type: 'Feature',
-          properties: { name: geo.name },
-          geometry: { type: 'Polygon', coordinates: [coords] },
-        },
-      });
-
-      map.addLayer({
-        id: `${sourceId}-fill`,
-        type: 'fill',
-        source: sourceId,
-        paint: { 'fill-color': '#10b981', 'fill-opacity': 0.12 },
-      });
-
-      map.addLayer({
-        id: `${sourceId}-outline`,
-        type: 'line',
-        source: sourceId,
-        paint: { 'line-color': '#059669', 'line-width': 2, 'line-opacity': 0.7 },
-      });
-    });
-  };
-
-  // Update markers when data changes
+  // Re-render markers/geofences whenever inputs change
   useEffect(() => {
-    if (mapRef.current && mapLoaded) {
-      const doUpdate = async () => {
-        const mapboxgl = (await import('mapbox-gl')).default;
-        updateMapData(mapRef.current, mapboxgl);
-      };
-      doUpdate();
+    if (mapReady) {
+      renderMapLayers();
     }
-  }, [markers, geofences, routePath, mapLoaded]);
+  }, [mapReady, renderMapLayers]);
 
-  const handleZoomIn = () => mapRef.current?.zoomIn();
-  const handleZoomOut = () => mapRef.current?.zoomOut();
+  // Zoom and Recenter handlers
+  const handleZoomIn = () => leafletMapRef.current?.zoomIn();
+  const handleZoomOut = () => leafletMapRef.current?.zoomOut();
   const handleRecenter = () => {
-    mapRef.current?.flyTo({ center: defaultCenter, zoom: 6, duration: 1000 });
+    const map = leafletMapRef.current;
+    if (!map) return;
+
+    if (markers.length > 0) {
+      const L = leafletLibRef.current;
+      const bounds = L.latLngBounds(markers.map((m) => [m.latitude, m.longitude]));
+      map.flyToBounds(bounds.pad(0.2), { duration: 1 });
+    } else {
+      map.flyTo(defaultCenter, 6.5, { duration: 1 });
+    }
   };
 
   return (
-    <div className={cn('relative rounded-xl overflow-hidden shadow-neu-sm border border-slate-200', className)} style={{ height }}>
-      <div ref={mapContainer} className="w-full h-full" />
+    <div
+      className={cn('relative rounded-2xl overflow-hidden shadow-neu-sm border border-slate-200 bg-slate-100', className)}
+      style={{ height }}
+    >
+      {/* Leaflet Map DOM Container */}
+      <div ref={mapContainerRef} className="w-full h-full z-0" tabIndex={0} />
 
-      {/* If no token, show a nice fallback */}
-      {!mapboxToken && (
-        <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-slate-100 to-slate-200 text-slate-500">
-          <div className="text-center p-6">
-            <Navigation className="w-12 h-12 mx-auto mb-3 text-slate-400" />
-            <p className="font-semibold text-sm">Map Token Required</p>
-            <p className="text-xs mt-1 text-slate-400">Add NEXT_PUBLIC_MAPBOX_TOKEN to .env</p>
-          </div>
-        </div>
-      )}
-
-      {/* Zoom Controls */}
+      {/* Top Left Navigation Controls */}
       <div className="absolute top-3 left-3 z-20 flex flex-col gap-1.5">
-        <button onClick={handleZoomIn} className="w-8 h-8 bg-white/95 backdrop-blur rounded-lg shadow-md border border-slate-200 flex items-center justify-center text-slate-600 hover:text-slate-900 hover:bg-white transition">
+        <button
+          onClick={handleZoomIn}
+          title="Zoom In"
+          className="w-8 h-8 bg-white/95 backdrop-blur rounded-lg shadow-md border border-slate-200 flex items-center justify-center text-slate-700 hover:text-emerald-700 hover:bg-white active:scale-95 transition"
+        >
           <ZoomIn className="w-4 h-4" />
         </button>
-        <button onClick={handleZoomOut} className="w-8 h-8 bg-white/95 backdrop-blur rounded-lg shadow-md border border-slate-200 flex items-center justify-center text-slate-600 hover:text-slate-900 hover:bg-white transition">
+        <button
+          onClick={handleZoomOut}
+          title="Zoom Out"
+          className="w-8 h-8 bg-white/95 backdrop-blur rounded-lg shadow-md border border-slate-200 flex items-center justify-center text-slate-700 hover:text-emerald-700 hover:bg-white active:scale-95 transition"
+        >
           <ZoomOut className="w-4 h-4" />
         </button>
-        <button onClick={handleRecenter} className="w-8 h-8 bg-white/95 backdrop-blur rounded-lg shadow-md border border-slate-200 flex items-center justify-center text-slate-600 hover:text-slate-900 hover:bg-white transition">
+        <button
+          onClick={handleRecenter}
+          title="Recenter Map Bounds"
+          className="w-8 h-8 bg-white/95 backdrop-blur rounded-lg shadow-md border border-slate-200 flex items-center justify-center text-slate-700 hover:text-emerald-700 hover:bg-white active:scale-95 transition"
+        >
           <Maximize2 className="w-4 h-4" />
         </button>
       </div>
 
-      {/* Layer Control Bar Overlay */}
-      <div className="absolute top-3 right-3 z-20 flex items-center gap-2 bg-white/90 backdrop-blur-md px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm text-xs">
-        <Layers className="w-3.5 h-3.5 text-slate-500" />
-        <label className="flex items-center gap-1.5 cursor-pointer select-none hover:text-emerald-700 transition">
+      {/* Top Right Layers & Map Mode Control */}
+      <div className="absolute top-3 right-3 z-20 flex items-center gap-2 bg-white/95 backdrop-blur-md px-3 py-1.5 rounded-xl border border-slate-200 shadow-md text-xs">
+        <div className="flex items-center gap-1 text-slate-600 font-semibold mr-1">
+          <Layers className="w-3.5 h-3.5 text-emerald-600" />
+          <span className="hidden sm:inline">Layers:</span>
+        </div>
+
+        {/* Geofence Toggle */}
+        <label className="flex items-center gap-1.5 cursor-pointer select-none text-slate-700 hover:text-emerald-700 transition">
           <input
             type="checkbox"
             checked={showGeofences}
             onChange={(e) => setShowGeofences(e.target.checked)}
             className="rounded text-emerald-600 focus:ring-emerald-500 w-3.5 h-3.5 cursor-pointer"
           />
-          <span className="font-bold text-slate-700">Geofences</span>
+          <span className="font-bold">Geofences</span>
         </label>
 
-        <span className="w-px h-3 bg-slate-300 mx-1" />
+        <span className="w-px h-3.5 bg-slate-300 mx-1" />
 
-        <label className="flex items-center gap-1.5 cursor-pointer select-none hover:text-sky-700 transition">
+        {/* Route Trail Toggle */}
+        <label className="flex items-center gap-1.5 cursor-pointer select-none text-slate-700 hover:text-sky-700 transition">
           <input
             type="checkbox"
             checked={showPath}
             onChange={(e) => setShowPath(e.target.checked)}
             className="rounded text-sky-600 focus:ring-sky-500 w-3.5 h-3.5 cursor-pointer"
           />
-          <span className="font-bold text-slate-700">Route Trails</span>
+          <span className="font-bold">Routes</span>
         </label>
+
+        <span className="w-px h-3.5 bg-slate-300 mx-1" />
+
+        {/* Map Tile Style Switcher */}
+        <button
+          onClick={() => setMapStyle(mapStyle === 'voyager' ? 'osm' : 'voyager')}
+          className="text-[11px] font-bold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-2 py-0.5 rounded transition"
+          title="Toggle Tile Style"
+        >
+          {mapStyle === 'voyager' ? 'Carto Voyager' : 'OpenStreetMap'}
+        </button>
       </div>
 
-      {/* Telemetry Status Legend Overlay */}
-      <div className="absolute bottom-3 left-3 z-20 flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4 bg-white/90 backdrop-blur-md px-3 py-2 rounded-lg border border-slate-200 shadow-sm text-[11px] text-slate-700">
+      {/* Bottom Left Telemetry Status Legend */}
+      <div className="absolute bottom-3 left-3 z-20 flex flex-wrap items-center gap-2 sm:gap-4 bg-white/95 backdrop-blur-md px-3 py-2 rounded-xl border border-slate-200 shadow-md text-[11px] text-slate-700">
         <span className="flex items-center gap-1.5 font-bold">
-          <span className="w-3 h-3 rounded-full bg-slate-900 inline-block" /> Active Fleet
+          <span className="w-2.5 h-2.5 rounded-full bg-slate-900 inline-block" /> Active Fleet (M-2 / M-5)
         </span>
         <span className="flex items-center gap-1.5 font-bold text-rose-700">
-          <span className="w-3 h-3 rounded-full bg-rose-600 inline-block animate-pulse" /> Temp Alert
+          <span className="w-2.5 h-2.5 rounded-full bg-rose-600 inline-block animate-pulse" /> Temp Breach (&gt;8°C)
         </span>
         <span className="flex items-center gap-1.5 font-bold text-sky-700">
-          <span className="w-3 h-3 rounded-sm bg-sky-600 inline-block" /> Cold Hub
+          <span className="w-2.5 h-2.5 rounded-sm bg-sky-600 inline-block" /> Cold Hub
         </span>
         <span className="flex items-center gap-1.5 font-bold text-emerald-700">
-          <span className="w-3 h-3 rounded-sm bg-emerald-600 inline-block" /> Farm
+          <span className="w-2.5 h-2.5 rounded-sm bg-emerald-600 inline-block" /> Farm
         </span>
+      </div>
+
+      {/* Live Status Chip Bottom Right */}
+      <div className="absolute bottom-3 right-3 z-20 hidden md:flex items-center gap-1.5 bg-emerald-50/90 text-emerald-800 border border-emerald-200 px-2.5 py-1 rounded-lg text-[10px] font-bold shadow-sm backdrop-blur">
+        <Radio className="w-3 h-3 text-emerald-600 animate-pulse" />
+        <span>Telemetry Live • 0 Token Required</span>
       </div>
     </div>
   );

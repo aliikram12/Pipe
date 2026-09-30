@@ -24,6 +24,12 @@ import { cn } from '@/lib/utils';
 
 const DEMO_USERS = [
   {
+    role: 'SUPER_ADMIN' as UserRole,
+    name: 'Malik Farooq Ahmad',
+    email: 'admin@demo.com',
+    label: 'Super Admin — System Governance',
+  },
+  {
     role: 'FARMER' as UserRole,
     name: 'Chaudhry Tariq Mehmood',
     email: 'farmer@demo.com',

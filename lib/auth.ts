@@ -4,8 +4,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { UserRole, UserSession } from './types';
 import prisma from './prisma';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'agrisupply-secret-2026';
-const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'agrisupply-refresh-2026';
+const JWT_SECRET = process.env.JWT_SECRET || 'agrisupply-production-jwt-access-secret-key-xyz-2026';
+const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'agrisupply-production-jwt-refresh-secret-key-xyz-2026';
 
 export const ROLE_DASHBOARDS: Record<UserRole, string> = {
   SUPER_ADMIN: '/dashboard/admin',
@@ -80,6 +80,42 @@ export function extractTokenFromHeader(req: NextRequest): string | null {
   return cookieToken || null;
 }
 
+export function setAuthCookies(res: NextResponse, accessToken: string, refreshToken: string) {
+  res.cookies.set('agri_access_token', accessToken, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/',
+    maxAge: 60 * 60 * 24, // 1 day
+  });
+
+  res.cookies.set('agri_refresh_token', refreshToken, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/',
+    maxAge: 60 * 60 * 24 * 7, // 7 days
+  });
+}
+
+export function clearAuthCookies(res: NextResponse) {
+  res.cookies.set('agri_access_token', '', {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/',
+    maxAge: 0,
+  });
+
+  res.cookies.set('agri_refresh_token', '', {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/',
+    maxAge: 0,
+  });
+}
+
 export async function authenticateRequest(
   req: NextRequest,
   allowedRoles?: UserRole[]
@@ -89,7 +125,7 @@ export async function authenticateRequest(
     return {
       user: null,
       errorResponse: NextResponse.json(
-        { error: 'Unauthorized: Authentication required' },
+        { error: 'Unauthorized: Authentication token required' },
         { status: 401 }
       ),
     };

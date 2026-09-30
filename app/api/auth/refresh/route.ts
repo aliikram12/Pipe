@@ -1,19 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import { verifyRefreshToken, signAccessToken, signRefreshToken } from '@/lib/auth';
-import { z } from 'zod';
-
-const schema = z.object({ refreshToken: z.string() });
+import { verifyRefreshToken, signAccessToken, signRefreshToken, setAuthCookies } from '@/lib/auth';
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
-    const parsed = schema.safeParse(body);
-    if (!parsed.success) {
+    let token: string | undefined;
+
+    try {
+      const body = await req.json();
+      token = body?.refreshToken;
+    } catch {
+      // Body might be empty if called via cookie
+    }
+
+    if (!token) {
+      token = req.cookies.get('agri_refresh_token')?.value;
+    }
+
+    if (!token) {
       return NextResponse.json({ error: 'Refresh token is required' }, { status: 400 });
     }
 
-    const decoded = verifyRefreshToken(parsed.data.refreshToken);
+    const decoded = verifyRefreshToken(token);
     if (!decoded) {
       return NextResponse.json({ error: 'Invalid or expired refresh token' }, { status: 401 });
     }
@@ -38,11 +46,17 @@ export async function POST(req: NextRequest) {
       tenantName: user.tenant.name,
     };
 
-    return NextResponse.json({
-      accessToken: signAccessToken(session),
-      refreshToken: signRefreshToken(session),
+    const newAccessToken = signAccessToken(session);
+    const newRefreshToken = signRefreshToken(session);
+
+    const response = NextResponse.json({
+      accessToken: newAccessToken,
+      refreshToken: newRefreshToken,
       user: session,
     });
+
+    setAuthCookies(response, newAccessToken, newRefreshToken);
+    return response;
   } catch (error) {
     console.error('Token refresh error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

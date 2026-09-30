@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import { comparePassword, signAccessToken, signRefreshToken } from '@/lib/auth';
+import { comparePassword, signAccessToken, signRefreshToken, setAuthCookies } from '@/lib/auth';
 import { z } from 'zod';
 
 const loginSchema = z.object({
@@ -67,11 +67,14 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       user: session,
       accessToken,
       refreshToken,
     });
+
+    setAuthCookies(response, accessToken, refreshToken);
+    return response;
   } catch (error) {
     console.error('Login error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
