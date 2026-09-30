@@ -1,0 +1,432 @@
+// AgriSupply Chain & Smart Cold-Chain Logistics Platform - Prisma Schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Tenant {
+  id           String        @id @default(cuid())
+  name         String
+  type         String        // "AGRI_PRODUCER", "LOGISTICS_PROVIDER", "RETAIL_CHAIN", "ENTERPRISE"
+  location     String
+  contactEmail String
+  contactPhone String
+  createdAt    DateTime      @default(now())
+
+  users        User[]
+  farms        Farm[]
+  batches      ProduceBatch[]
+  vehicles     Vehicle[]
+  drivers      Driver[]
+  shipments    Shipment[]
+  geofences    Geofence[]
+  warehouses   Warehouse[]
+  orders       Order[]
+  transactions Transaction[]
+  invoices     Invoice[]
+  notifications Notification[]
+  auditLogs    AuditLog[]
+}
+
+model User {
+  id           String        @id @default(cuid())
+  tenantId     String
+  name         String
+  email        String        @unique
+  passwordHash String
+  role         String        // "SUPER_ADMIN", "FARMER", "TRANSPORTER", "WAREHOUSE_ADMIN", "RETAILER"
+  phone        String?
+  avatar       String?
+  status       String        @default("ACTIVE") // "ACTIVE", "INACTIVE", "SUSPENDED"
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  farms        Farm[]
+  inspections  QualityInspection[]
+  orders       Order[]
+  notifications Notification[]
+  auditLogs    AuditLog[]
+
+  @@index([tenantId])
+  @@index([email])
+}
+
+model Farm {
+  id          String        @id @default(cuid())
+  tenantId    String
+  farmerId    String
+  farmName    String
+  location    String
+  latitude    Float
+  longitude   Float
+  totalArea   Float         // In hectares/acres
+  cropTypes   String        // Comma-separated or JSON string: "Tomato, Potato, Mango"
+  status      String        @default("ACTIVE")
+  createdAt   DateTime      @default(now())
+
+  tenant      Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  farmer      User          @relation(fields: [farmerId], references: [id])
+  batches     ProduceBatch[]
+
+  @@index([tenantId])
+  @@index([farmerId])
+}
+
+model ProduceBatch {
+  id               String        @id @default(cuid())
+  tenantId         String
+  farmId           String
+  batchNumber      String        @unique
+  produceType      String        // e.g. "Tomatoes", "Potatoes", "Mangoes", "Apples", "Onions"
+  variety          String        // e.g. "Roma", "Russet", "Alphonso", "Fuji", "Red Creole"
+  quantity         Float
+  unit             String        @default("kg") // "kg", "tons", "crates"
+  harvestDate      DateTime
+  expectedShelfLife Int          // In days
+  currentStage     String        @default("HARVESTED") // "HARVESTED", "QUALITY_CHECK", "READY_FOR_TRANSPORT", "IN_TRANSIT", "COLD_STORAGE", "DISTRIBUTION", "DELIVERED"
+  qualityStatus    String        @default("PENDING")   // "PENDING", "APPROVED", "CONDITIONAL", "REJECTED"
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  tenant           Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  farm             Farm          @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  inspections      QualityInspection[]
+  shipments        Shipment[]
+  orderItems       OrderItem[]
+
+  @@index([tenantId])
+  @@index([farmId])
+  @@index([batchNumber])
+  @@index([currentStage])
+}
+
+model QualityInspection {
+  id              String        @id @default(cuid())
+  batchId         String
+  inspectorId     String
+  inspectionDate  DateTime      @default(now())
+  temperature     Float         // Celcius
+  humidity        Float         // Percentage
+  grade           String        // "Grade A", "Grade B", "Grade C", "Rejected"
+  moisture        Float         // Moisture %
+  appearance      String        // "Excellent", "Good", "Fair", "Poor"
+  contamination   Boolean       @default(false)
+  notes           String?
+  images          String?       // JSON array of image URLs
+  status          String        @default("APPROVED") // "APPROVED", "CONDITIONAL", "REJECTED"
+  rejectionReason String?
+  tempViolationExplanation String?
+  createdAt       DateTime      @default(now())
+
+  batch           ProduceBatch  @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  inspector       User          @relation(fields: [inspectorId], references: [id])
+
+  @@index([batchId])
+  @@index([inspectorId])
+}
+
+model Vehicle {
+  id                   String        @id @default(cuid())
+  tenantId             String
+  vehicleNumber        String        @unique
+  type                 String        // "Refrigerated Truck (10T)", "Van (2T)", "Trailer (24T)", "Electric Reefer"
+  capacity             Float         // In kg
+  refrigerationEnabled Boolean       @default(true)
+  status               String        @default("AVAILABLE") // "AVAILABLE", "IN_TRANSIT", "MAINTENANCE", "OFFLINE"
+  currentLatitude      Float
+  currentLongitude     Float
+  lastGpsUpdate        DateTime      @default(now())
+
+  tenant               Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  shipments            Shipment[]
+  gpsLocations         GPSLocation[]
+
+  @@index([tenantId])
+}
+
+model Driver {
+  id            String        @id @default(cuid())
+  tenantId      String
+  name          String
+  phone         String
+  licenseNumber String
+  status        String        @default("AVAILABLE") // "AVAILABLE", "ON_DUTY", "OFF_DUTY"
+  createdAt     DateTime      @default(now())
+
+  tenant        Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  shipments     Shipment[]
+
+  @@index([tenantId])
+}
+
+model Shipment {
+  id               String        @id @default(cuid())
+  tenantId         String
+  shipmentNumber   String        @unique
+  batchId          String
+  vehicleId        String
+  driverId         String
+  source           String
+  sourceLat        Float?
+  sourceLng        Float?
+  destination      String
+  destinationLat   Float?
+  destinationLng   Float?
+  status           String        @default("PLANNED") // "PLANNED", "IN_TRANSIT", "NEAR_DESTINATION", "ARRIVED", "DELIVERED", "DELAYED"
+  expectedDelivery DateTime
+  actualDelivery   DateTime?
+  quantity         Float
+  deliveryProofUrl String?
+  receiverName     String?
+  receiverSignature String?
+  notes            String?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  tenant           Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  batch            ProduceBatch  @relation(fields: [batchId], references: [id])
+  vehicle          Vehicle       @relation(fields: [vehicleId], references: [id])
+  driver           Driver        @relation(fields: [driverId], references: [id])
+  gpsLocations     GPSLocation[]
+
+  @@index([tenantId])
+  @@index([batchId])
+  @@index([vehicleId])
+  @@index([driverId])
+  @@index([shipmentNumber])
+}
+
+model GPSLocation {
+  id         String    @id @default(cuid())
+  shipmentId String?
+  vehicleId  String
+  latitude   Float
+  longitude  Float
+  speed      Float     @default(0.0) // km/h
+  timestamp  DateTime  @default(now())
+
+  shipment   Shipment? @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  vehicle    Vehicle   @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+
+  @@index([shipmentId])
+  @@index([vehicleId])
+  @@index([timestamp])
+}
+
+model Geofence {
+  id        String   @id @default(cuid())
+  tenantId  String
+  name      String
+  type      String   // "WAREHOUSE", "FARM", "RETAILER", "CHECKPOINT"
+  latitude  Float
+  longitude Float
+  radius    Float    // In meters (e.g. 500)
+  status    String   @default("ACTIVE") // "ACTIVE", "INACTIVE"
+  createdAt DateTime @default(now())
+
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+}
+
+model Warehouse {
+  id              String        @id @default(cuid())
+  tenantId        String
+  name            String
+  location        String
+  latitude        Float
+  longitude       Float
+  capacity        Float         // in tons
+  currentCapacity Float         @default(0)
+  status          String        @default("OPERATIONAL")
+  createdAt       DateTime      @default(now())
+
+  tenant          Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  coldStorages    ColdStorage[]
+
+  @@index([tenantId])
+}
+
+model ColdStorage {
+  id             String        @id @default(cuid())
+  warehouseId    String
+  name           String        // e.g. "Chamber A - Deep Chill", "Chamber B - Controlled Atmos"
+  temperatureMin Float         @default(2.0)
+  temperatureMax Float         @default(8.0)
+  humidityMin    Float         @default(65.0)
+  humidityMax    Float         @default(85.0)
+  status         String        @default("ACTIVE") // "ACTIVE", "ALERT", "MAINTENANCE"
+  createdAt      DateTime      @default(now())
+
+  warehouse      Warehouse     @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  sensors        IoTSensor[]
+
+  @@index([warehouseId])
+}
+
+model IoTSensor {
+  id            String          @id @default(cuid())
+  coldStorageId String
+  sensorCode    String          @unique // e.g. "IOT-REEFER-01"
+  sensorType    String          @default("TEMPERATURE_HUMIDITY") // "TEMPERATURE_HUMIDITY", "ETHYLENE", "DOOR_OPEN"
+  status        String          @default("ONLINE") // "ONLINE", "OFFLINE", "ALERT"
+  lastReading   DateTime        @default(now())
+  createdAt     DateTime        @default(now())
+
+  coldStorage   ColdStorage     @relation(fields: [coldStorageId], references: [id], onDelete: Cascade)
+  readings      SensorReading[]
+
+  @@index([coldStorageId])
+  @@index([sensorCode])
+}
+
+model SensorReading {
+  id          String    @id @default(cuid())
+  sensorId    String
+  temperature Float
+  humidity    Float
+  isAlert     Boolean   @default(false)
+  alertReason String?
+  timestamp   DateTime  @default(now())
+
+  sensor      IoTSensor @relation(fields: [sensorId], references: [id], onDelete: Cascade)
+
+  @@index([sensorId])
+  @@index([timestamp])
+}
+
+model Order {
+  id           String        @id @default(cuid())
+  tenantId     String
+  retailerId   String
+  orderNumber  String        @unique
+  status       String        @default("PENDING") // "PENDING", "CONFIRMED", "PREPARING", "DISPATCHED", "IN_TRANSIT", "DELIVERED", "CANCELLED"
+  subtotal     Float         @default(0)
+  tax          Float         @default(0)
+  totalAmount  Float         @default(0)
+  deliveryDate DateTime
+  shippingAddress String
+  notes        String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  retailer     User          @relation(fields: [retailerId], references: [id])
+  items        OrderItem[]
+  invoices     Invoice[]
+
+  @@index([tenantId])
+  @@index([retailerId])
+  @@index([orderNumber])
+}
+
+model OrderItem {
+  id             String       @id @default(cuid())
+  orderId        String
+  produceBatchId String
+  quantity       Float
+  unitPrice      Float
+  subtotal       Float
+
+  order          Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  produceBatch   ProduceBatch @relation(fields: [produceBatchId], references: [id])
+
+  @@index([orderId])
+  @@index([produceBatchId])
+}
+
+model Transaction {
+  id              String   @id @default(cuid())
+  tenantId        String
+  type            String   // "PURCHASE", "SALE", "TRANSPORT_FEE", "STORAGE_FEE", "PAYMENT", "REFUND"
+  referenceId     String   // Order ID or Shipment ID
+  amount          Float
+  currency        String   @default("USD")
+  status          String   @default("COMPLETED") // "PENDING", "COMPLETED", "FAILED"
+  paymentMethod   String   @default("BANK_TRANSFER") // "BANK_TRANSFER", "ESCROW", "CREDIT", "CARD"
+  transactionDate DateTime @default(now())
+
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+}
+
+model Invoice {
+  id            String   @id @default(cuid())
+  tenantId      String
+  invoiceNumber String   @unique
+  orderId       String
+  subtotal      Float
+  tax           Float
+  total         Float
+  status        String   @default("ISSUED") // "DRAFT", "ISSUED", "PAID", "OVERDUE"
+  issuedAt      DateTime @default(now())
+  dueDate       DateTime
+
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  order         Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([orderId])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  tenantId  String
+  userId    String?
+  type      String   // "SHIPMENT", "GPS", "GEOFENCE", "IOT", "TEMPERATURE", "ORDER", "PAYMENT", "QUALITY", "SYSTEM", "SYNC"
+  title     String
+  message   String
+  priority  String   @default("INFO") // "INFO", "WARNING", "CRITICAL", "SUCCESS"
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([userId])
+  @@index([read])
+  @@index([createdAt])
+}
+
+model SyncQueue {
+  id        String    @id @default(cuid())
+  userId    String
+  deviceId  String
+  operation String    // "CREATE", "UPDATE", "DELETE"
+  entity    String    // "SHIPMENT", "INSPECTION", "GPS", "PROOF"
+  payload   String    // JSON String of payload
+  status    String    @default("PENDING") // "PENDING", "SYNCED", "FAILED"
+  error     String?
+  createdAt DateTime  @default(now())
+  syncedAt  DateTime?
+
+  @@index([userId])
+  @@index([status])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  tenantId  String
+  userId    String
+  action    String   // "LOGIN", "LOGOUT", "CREATE_BATCH", "INSPECT_BATCH", "STATUS_CHANGE", "TEMP_BREACH", "ORDER_CREATED", etc.
+  entity    String   // "USER", "BATCH", "SHIPMENT", "SENSOR", "ORDER"
+  details   String?  // JSON or text description
+  ipAddress String?
+  createdAt DateTime @default(now())
+
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([userId])
+  @@index([createdAt])
+}

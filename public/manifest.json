@@ -1,0 +1,16 @@
+{
+  "name": "AgriSupply Chain & Smart Cold-Chain Logistics Platform",
+  "short_name": "AgriSupply PK",
+  "description": "Enterprise Pakistani agricultural cold-chain logistics platform with real-time GPS tracking and IoT telemetry.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#022c22",
+  "theme_color": "#059669",
+  "icons": [
+    {
+      "src": "/icon.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    }
+  ]
+}
