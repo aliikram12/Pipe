@@ -1,4 +1,4 @@
-// File: D:\WB\Web Task\AgriSupply Chain & Smart Cold-Chain Logistics Platform\app\api\batches\route.ts
+// File: D:\Pipe\app\api\batches\route.ts
 import * as entry from '../../../../../app/api/batches/route.js'
 import type { NextRequest } from 'next/server.js'
 

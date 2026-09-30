@@ -382,7 +382,7 @@ export default function TrackingPage() {
                       {m.name}
                     </span>
                   </div>
-                  {m.temperature !== undefined && (
+                  {m.temperature != null && (
                     <span
                       className={`font-mono font-bold text-[11px] px-1.5 py-0.2 rounded ${
                         m.temperature > 6 ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-800'

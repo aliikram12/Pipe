@@ -1,4 +1,4 @@
-// File: D:\WB\Web Task\AgriSupply Chain & Smart Cold-Chain Logistics Platform\app\inventory\page.tsx
+// File: D:\Pipe\app\inventory\page.tsx
 import * as entry from '../../../../app/inventory/page.js'
 import type { ResolvingMetadata, ResolvingViewport } from 'next/dist/lib/metadata/types/metadata-interface.js'
 
