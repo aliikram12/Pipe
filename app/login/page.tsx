@@ -1,11 +1,8 @@
+'use client';
+
 import { useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/stores/auth-store';
-
-function LoginFormContent() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const from = searchParams.get('from') || '/';
 import {
   Snowflake,
   Sprout,
@@ -111,7 +108,7 @@ const DEMO_PRESETS: RolePreset[] = [
   },
 ];
 
-export default function LoginPage() {
+function LoginFormContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const from = searchParams.get('from') || '/';
@@ -228,7 +225,7 @@ export default function LoginPage() {
                   1
                 </span>
                 <span className="text-xs font-bold uppercase tracking-wider text-slate-800">
-                  Select User Role / Demostration Persona
+                  Select User Role / Demonstration Persona
                 </span>
               </div>
               <span className="text-[11px] text-slate-500 font-medium">
@@ -509,5 +506,22 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center bg-slate-50">
+          <div className="flex items-center gap-3 text-slate-700 font-semibold text-sm">
+            <div className="w-5 h-5 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin" />
+            <span>Loading ColdIQ Authentication...</span>
+          </div>
+        </div>
+      }
+    >
+      <LoginFormContent />
+    </Suspense>
   );
 }
