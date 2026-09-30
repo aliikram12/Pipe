@@ -8,6 +8,7 @@ import { StatusBadge } from '@/components/ui/status-badge';
 import { TelemetryChart, TelemetryPoint } from '@/components/sensors/telemetry-chart';
 import { PDFExporter } from '@/components/reports/pdf-exporter';
 import { CSVExporter } from '@/components/reports/csv-exporter';
+import { WeatherWidget } from '@/components/sensors/weather-widget';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import {
   Snowflake,
@@ -70,6 +71,9 @@ export default function DashboardPage() {
 
   useEffect(() => {
     fetchDashboard();
+    // Auto-refresh dashboard data every 30 seconds for real-time updates
+    const refreshInterval = setInterval(fetchDashboard, 30000);
+    return () => clearInterval(refreshInterval);
   }, [accessToken]);
 
   // Demo simulator button: Trigger a simulated IoT temperature breach
@@ -409,15 +413,20 @@ export default function DashboardPage() {
           />
         </div>
 
-        {/* Right: IoT Telemetry Recharts Stream */}
-        <div className="neu-flat p-5 rounded-2xl">
-          <TelemetryChart
-            data={telemetryStream}
-            minTempThreshold={2.0}
-            maxTempThreshold={6.0}
-            title="Live Cold Storage & Reefer Telemetry"
-            subtitle="Streaming from SNS-PK-LHR-01 (Citrus Zone) & NLC Reefer LES-8842"
-          />
+        {/* Right: IoT Telemetry + Weather */}
+        <div className="flex flex-col gap-4">
+          <div className="neu-flat p-5 rounded-2xl">
+            <TelemetryChart
+              data={telemetryStream}
+              minTempThreshold={2.0}
+              maxTempThreshold={6.0}
+              title="Live Cold Storage & Reefer Telemetry"
+              subtitle="Streaming from SNS-PK-LHR-01 (Citrus Zone) & NLC Reefer LES-8842"
+            />
+          </div>
+
+          {/* Weather Widget */}
+          <WeatherWidget city="Lahore" latitude={31.5204} longitude={74.3587} />
         </div>
       </div>
 

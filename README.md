@@ -1,117 +1,199 @@
-# AgriSupply Chain & Smart Cold-Chain Logistics Platform 🚀
+# 🧊 AgriSupply ColdIQ Platform
 
-A highly professional, enterprise-grade Next.js application designed to manage, monitor, and optimize agricultural supply chains and cold-storage logistics in Pakistan (and globally).
+> **Smart Cold-Chain Logistics & Agricultural Provenance Platform**
+
+A production-grade, full-stack supply chain management platform designed for Pakistan's agricultural ecosystem. Built with Next.js 14, Prisma, PostgreSQL, Mapbox GL, and real-time IoT telemetry.
+
+---
 
 ## 🌟 Key Features
 
-### 1. **Live GPS Fleet Tracking (Google Maps API)**
-- Real-time vehicle telemetry using `@react-google-maps/api`.
-- Built-in geofencing logic for cold-storage hubs and farms.
-- Route trails and active temperature excursion alerts.
+### 🚜 Multi-Role RBAC System
+- **Farmer / Producer** — Harvest batch registration, QR generation & yield tracking
+- **Transporter (NLC Fleet)** — Live GPS dispatch, reefer telemetry & M-2/M-5 geofencing
+- **Warehouse Admin** — Lahore Cold-Chain Hub chamber control, IoT thresholds & batch intake
+- **Retailer (Imtiaz)** — Produce procurement, cold-chain provenance & PKR invoicing
 
-### 2. **Professional Modern UI (Tailwind CSS)**
-- Crisp, high-contrast, professional corporate design (Slate, Emerald, Navy).
-- Custom flat-design component library with elegant depth and micro-animations.
-- Fully responsive across desktop, tablet, and mobile.
+### 📊 Real-Time Dashboard
+- KPI cards with live metrics (batches, shipments, cold storage, alerts)
+- Interactive telemetry charts with temperature & humidity streaming
+- Weather widget with cold-chain impact assessment
+- Simulated IoT temperature excursion triggers
 
-### 3. **Offline Resilience (IndexedDB)**
-- "Offline Mode Simulation" built right into the header.
-- Uses `dexie` to cache mutations locally when network drops.
-- Automatic queue synchronization when connection is restored.
+### 🗺️ Fleet GPS & Live Tracking
+- **Mapbox GL JS** powered professional map with custom markers
+- Real-time vehicle tracking with temperature overlay
+- Geofence zones (warehouse, farm, checkpoint) visualization
+- Route trail polylines for shipment path history
 
-### 4. **Role-Based Access Control (RBAC)**
-- Instant Role Switching (Super Admin, Warehouse Admin, Transporter, Farmer).
-- Granular permissions and tailored dashboards based on the user's role.
+### 🌡️ IoT Cold-Chain Monitoring
+- Multi-sensor dashboard (temperature, humidity, ethylene, door sensors)
+- Real-time telemetry charts with threshold alerts
+- Temperature excursion detection & auto-notifications
+- Cold storage chamber management (capacity, status, sensor health)
 
-### 5. **Robust Database & ORM (Neon PostgreSQL + Prisma)**
-- Relational database schema with full referential integrity.
-- Type-safe queries using Prisma Client.
-- Ready for serverless scaling.
+### 📦 Supply Chain Management
+- **Produce Batches** — Full lifecycle from harvest to delivery with quality grades
+- **Cold Shipments** — Planned, in-transit, delivered status with GPS tracking
+- **Quality Inspection** — Grade A/B/C classification, contamination checks
+- **Marketplace Orders** — Multi-item procurement with PKR invoicing
 
----
+### 🔔 Real-Time Notifications
+- Slide-out notification center with priority filters
+- Critical/Warning/Info alert classification
+- WebSocket + smart polling fallback for Vercel deployment
+- IoT temperature breach auto-alerts
 
-## 🛠️ Technology Stack
+### 📱 Responsive Design
+- Fully responsive for desktop, tablet, and mobile screens
+- Collapsible sidebar with mobile hamburger menu
+- Touch-optimized interactions
 
-- **Framework**: Next.js 14 (App Router)
-- **Styling**: Tailwind CSS + Custom Corporate Utility Classes (`globals.css`)
-- **Database**: Neon Serverless PostgreSQL
-- **ORM**: Prisma
-- **Mapping**: Google Maps SDK (`@react-google-maps/api`)
-- **State Management**: Zustand
-- **Offline Storage**: IndexedDB / Dexie.js
-- **Auth**: JWT-based session management
+### 🌐 Offline-First Architecture
+- IndexedDB (Dexie.js) queue for offline mutations
+- Automatic sync when connection restores
+- Simulated offline mode toggle for testing
 
----
-
-## 🚀 Local Development Setup
-
-1. **Install Dependencies**
-   ```bash
-   npm install
-   ```
-
-2. **Environment Configuration**
-   Create a `.env` file in the root directory and add the following keys:
-   ```env
-   # PostgreSQL Connection (Neon)
-   DATABASE_URL="postgresql://neondb_owner:npg_zCjfX6pDQ7EM@ep-dawn-silence-b58fom4m-pooler.c-7.us-east-2.aws.neon.tech/neondb?sslmode=require"
-   DIRECT_URL="postgresql://neondb_owner:npg_zCjfX6pDQ7EM@ep-dawn-silence-b58fom4m.c-7.us-east-2.aws.neon.tech/neondb?sslmode=require"
-
-   # Google Maps API Key for Live Tracking
-   NEXT_PUBLIC_GOOGLE_MAPS_API_KEY="AIzaSyDAcJPWyLLQMvWaQcWuc9neYM-geNYNIyY"
-   
-   # JWT Secret for Authentication
-   JWT_SECRET="your-super-secret-key-change-in-production"
-   ```
-
-3. **Database Setup**
-   ```bash
-   npx prisma generate
-   npx prisma db push
-   # Optional: Seed the database with demo data
-   npm run db:seed
-   ```
-
-4. **Run Development Server**
-   ```bash
-   npm run dev
-   ```
-   Open [http://localhost:3000](http://localhost:3000) to view the application.
+### 📈 Analytics & Reporting
+- Supply chain analytics with interactive charts (Recharts)
+- PDF export (jsPDF + AutoTable)
+- CSV data export
+- Audit trail with user action logging
 
 ---
 
-## ☁️ Deploying to Vercel (Best Way)
+## 🛠️ Tech Stack
 
-This project is perfectly optimized for 1-click deployment on Vercel. 
+| Category | Technology |
+|----------|------------|
+| **Framework** | Next.js 14 (App Router) |
+| **Language** | TypeScript |
+| **Styling** | Tailwind CSS 3 + Custom CSS Design System |
+| **Database** | PostgreSQL (Neon / Supabase / Vercel Postgres) |
+| **ORM** | Prisma 5 |
+| **State** | Zustand 5 |
+| **Data Fetching** | TanStack React Query + SWR patterns |
+| **Maps** | Mapbox GL JS |
+| **Charts** | Recharts |
+| **Weather** | WeatherAPI.com |
+| **Auth** | JWT (Access + Refresh Token Rotation) |
+| **Offline** | Dexie.js (IndexedDB) |
+| **PDF** | jsPDF + AutoTable |
+| **Icons** | Lucide React |
+| **Notifications** | Sonner (Toast) + Custom Panel |
+| **Drag & Drop** | dnd-kit |
+| **Forms** | React Hook Form + Zod |
 
-### Steps for Vercel Deployment:
-1. **Push your code to GitHub/GitLab/Bitbucket.**
-2. **Go to Vercel Dashboard** and click **"Add New Project"**.
-3. Import your repository.
-4. **Environment Variables**: In the deployment settings, make sure to add the exact environment variables from your `.env` file:
-   - `DATABASE_URL`
-   - `DIRECT_URL`
-   - `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`
-   - `JWT_SECRET`
-5. **Build Command**: Vercel automatically detects Next.js. The `package.json` already has `"build": "prisma generate && next build"`, which ensures the Prisma client is built before Next.js compiles. **Do not change the build command**.
-6. **Click Deploy**. 
+---
 
-Vercel will handle the rest, and your platform will be live globally on the Edge!
+## 🚀 Getting Started
+
+### Prerequisites
+- Node.js 18+ 
+- PostgreSQL database (recommended: [Neon](https://neon.tech) for free tier)
+
+### Installation
+
+```bash
+# Clone the repository
+git clone https://github.com/aliikram12/Pipe.git
+cd Pipe
+
+# Install dependencies
+npm install
+
+# Copy environment variables
+cp .env.example .env
+# Edit .env with your database URL, API keys, etc.
+
+# Generate Prisma client & push schema
+npx prisma generate
+npx prisma db push
+
+# Seed demo data (optional)
+npm run db:seed
+
+# Start development server
+npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000) to see the platform.
+
+### Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `DATABASE_URL` | ✅ | PostgreSQL connection string (pooled) |
+| `DIRECT_URL` | ✅ | PostgreSQL direct connection string |
+| `JWT_SECRET` | ✅ | JWT access token secret |
+| `JWT_REFRESH_SECRET` | ✅ | JWT refresh token secret |
+| `NEXT_PUBLIC_MAPBOX_TOKEN` | ⭐ | Mapbox GL JS public token (for maps) |
+| `NEXT_PUBLIC_WEATHER_API_KEY` | ⭐ | WeatherAPI.com key (for weather widget) |
 
 ---
 
-## 🏗️ Project Structure
+## 📂 Project Structure
 
-- `/app` - Next.js App Router pages and API endpoints.
-- `/components` - Reusable UI components (Layout, Maps, Offline, Notifications).
-- `/lib` - Utilities, type definitions, and Prisma client instance.
-- `/prisma` - Database schema (`schema.prisma`) and seeding scripts.
-- `/stores` - Zustand global state stores (Auth, Offline Queue).
-- `/server` - WebSocket server definitions (if running custom Node server).
-
-## 🔒 Security Notes
-- Ensure your `JWT_SECRET` is strong in production.
-- For Google Maps, it is highly recommended to restrict your API Key in the Google Cloud Console to only allow requests from your specific Vercel production domain.
+```
+├── app/                    # Next.js App Router pages
+│   ├── api/                # API routes (auth, batches, shipments, etc.)
+│   ├── analytics/          # Analytics & reports page
+│   ├── batches/            # Produce batch management
+│   ├── inventory/          # Cold storage & warehouse management
+│   ├── login/              # Authentication page
+│   ├── orders/             # Marketplace orders
+│   ├── quality/            # Quality inspection
+│   ├── settings/           # Platform settings
+│   ├── shipments/          # Cold shipment management
+│   ├── tracking/           # Fleet GPS tracking
+│   ├── globals.css         # Design system & global styles
+│   ├── layout.tsx          # Root layout
+│   └── page.tsx            # Dashboard (home)
+├── components/
+│   ├── layout/             # Sidebar, Header, AppLayout
+│   ├── map/                # Mapbox Live Tracking Map
+│   ├── notifications/      # Notification center panel
+│   ├── offline/            # Offline banner
+│   ├── reports/            # PDF & CSV exporters
+│   ├── sensors/            # Telemetry charts, weather widget
+│   └── ui/                 # Shared UI components (Modal, StatusBadge)
+├── hooks/                  # Custom hooks (API client, offline sync, realtime)
+├── lib/                    # Utilities, auth, prisma client, types
+├── prisma/                 # Prisma schema & seed script
+├── stores/                 # Zustand stores (auth, notifications, offline)
+└── public/                 # Static assets
+```
 
 ---
-*Built for the future of Pakistan's Smart AgriSupply Ecosystem.* 🌾🚛🧊
+
+## 🌐 Deployment (Vercel)
+
+This project is optimized for **Vercel** deployment:
+
+1. Push code to GitHub
+2. Import repository in Vercel Dashboard
+3. Add environment variables (DATABASE_URL, JWT_SECRET, etc.)
+4. Deploy — Vercel auto-detects Next.js and runs `prisma generate && next build`
+
+> **Note:** WebSocket server (`ws:server`) is not supported on Vercel's serverless platform. The app automatically falls back to smart polling (every 15 seconds) for real-time updates.
+
+---
+
+## 🔐 Demo Accounts
+
+| Role | Email | Password |
+|------|-------|----------|
+| Farmer | farmer@demo.com | Password123! |
+| Transporter | transporter@demo.com | Password123! |
+| Warehouse Admin | warehouse@demo.com | Password123! |
+| Retailer | retailer@demo.com | Password123! |
+
+---
+
+## 📄 License
+
+This project is proprietary and confidential.
+
+---
+
+**Built with ❤️ for Pakistan's Agricultural Supply Chain**

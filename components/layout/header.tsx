@@ -14,15 +14,15 @@ import {
   ThermometerSnowflake,
   Truck,
   Sparkles,
+  Menu,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { UserRole } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
 const DEMO_USERS = [
-
   {
     role: 'FARMER' as UserRole,
     name: 'Chaudhry Tariq Mehmood',
@@ -49,13 +49,46 @@ const DEMO_USERS = [
   },
 ];
 
-export function Header() {
+interface HeaderProps {
+  onToggleSidebar?: () => void;
+}
+
+export function Header({ onToggleSidebar }: HeaderProps) {
   const router = useRouter();
   const { user, setAuth, clearAuth } = useAuthStore();
   const { isSimulatingOffline, setSimulatingOffline } = useOfflineStore();
   const [roleMenuOpen, setRoleMenuOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [isSwitchingRole, setIsSwitchingRole] = useState(false);
+
+  const roleMenuRef = useRef<HTMLDivElement>(null);
+  const userMenuRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdowns when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (roleMenuRef.current && !roleMenuRef.current.contains(event.target as Node)) {
+        setRoleMenuOpen(false);
+      }
+      if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
+        setUserMenuOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Close dropdowns on Escape key
+  useEffect(() => {
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setRoleMenuOpen(false);
+        setUserMenuOpen(false);
+      }
+    }
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, []);
 
   const handleRoleSwitch = async (targetEmail: string) => {
     setIsSwitchingRole(true);
@@ -85,6 +118,7 @@ export function Header() {
   };
 
   const handleLogout = async () => {
+    setUserMenuOpen(false);
     try {
       await fetch('/api/auth/logout', { method: 'POST' });
     } catch {}
@@ -94,9 +128,16 @@ export function Header() {
 
   return (
     <header className="h-16 px-4 sm:px-6 flex items-center justify-between sticky top-0 z-30" style={{ background: "var(--color-bg)", borderBottom: "1px solid rgba(255,255,255,0.2)", boxShadow: "0 4px 6px -1px rgba(163,177,198,0.3)" }}>
-      {/* Search / Context */}
-      <div className="flex items-center gap-4 flex-1 max-w-md">
-        <div className="relative w-full">
+      {/* Mobile menu button + Search */}
+      <div className="flex items-center gap-3 flex-1 max-w-md">
+        <button
+          onClick={onToggleSidebar}
+          className="lg:hidden p-2 rounded-lg text-slate-600 hover:bg-slate-100 transition"
+          aria-label="Toggle sidebar"
+        >
+          <Menu className="w-5 h-5" />
+        </button>
+        <div className="relative w-full hidden sm:block">
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
@@ -145,9 +186,12 @@ export function Header() {
         </button>
 
         {/* Quick Role Switcher (Crucial for testing all 5 roles) */}
-        <div className="relative">
+        <div className="relative" ref={roleMenuRef}>
           <button
-            onClick={() => setRoleMenuOpen(!roleMenuOpen)}
+            onClick={() => {
+              setRoleMenuOpen(!roleMenuOpen);
+              setUserMenuOpen(false);
+            }}
             disabled={isSwitchingRole}
             className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold neu-button text-emerald-700 transition"
           >
@@ -156,11 +200,11 @@ export function Header() {
             <span className="font-bold underline decoration-emerald-500">
               {user?.role?.replace(/_/g, ' ') || 'Switch'}
             </span>
-            <ChevronDown className="w-3.5 h-3.5 opacity-60" />
+            <ChevronDown className={cn("w-3.5 h-3.5 opacity-60 transition-transform", roleMenuOpen && "rotate-180")} />
           </button>
 
           {roleMenuOpen && (
-            <div className="absolute right-0 mt-2 w-64 rounded-xl shadow-xl py-2 z-50 animate-in fade-in slide-in-from-top-2 neu-flat" style={{ border: "1px solid rgba(255,255,255,0.4)" }}>
+            <div className="absolute right-0 mt-2 w-64 rounded-xl shadow-xl py-2 z-50 animate-slide-up neu-flat" style={{ border: "1px solid rgba(255,255,255,0.4)" }}>
               <div className="px-3 py-1.5 border-b border-black/5 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
                 Instant Role Switch (RBAC)
               </div>
@@ -194,22 +238,25 @@ export function Header() {
         <div className="h-5 w-px bg-slate-300 mx-1 hidden sm:block" />
 
         {/* Current User Pill */}
-        <div className="relative">
+        <div className="relative" ref={userMenuRef}>
           <button
-            onClick={() => setUserMenuOpen(!userMenuOpen)}
+            onClick={() => {
+              setUserMenuOpen(!userMenuOpen);
+              setRoleMenuOpen(false);
+            }}
             className="flex items-center gap-2 p-1 rounded-lg hover:neu-inset transition"
           >
             <div className="w-7 h-7 rounded-full bg-emerald-600 text-white flex items-center justify-center font-bold text-xs">
               {user?.name ? user.name.charAt(0) : 'U'}
             </div>
             <span className="text-xs font-bold text-slate-800 hidden lg:inline max-w-[120px] truncate">
-              {user?.name || 'Alexander Cross'}
+              {user?.name || 'User'}
             </span>
-            <ChevronDown className="w-3.5 h-3.5 text-slate-500 hidden lg:inline" />
+            <ChevronDown className={cn("w-3.5 h-3.5 text-slate-500 hidden lg:inline transition-transform", userMenuOpen && "rotate-180")} />
           </button>
 
           {userMenuOpen && (
-            <div className="absolute right-0 mt-2 w-52 rounded-xl neu-flat py-2 z-50">
+            <div className="absolute right-0 mt-2 w-52 rounded-xl neu-flat py-2 z-50 animate-slide-up">
               <div className="px-3 py-2 border-b border-black/5">
                 <p className="text-xs font-bold text-slate-800">{user?.name}</p>
                 <p className="text-[11px] text-slate-600 truncate">{user?.email}</p>

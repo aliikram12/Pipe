@@ -1,8 +1,5 @@
 {
-  "framework": "nextjs",
   "buildCommand": "prisma generate && next build",
   "installCommand": "npm install",
-  "env": {
-    "NODE_ENV": "production"
-  }
+  "framework": "nextjs"
 }

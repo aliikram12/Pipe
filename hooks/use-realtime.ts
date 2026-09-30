@@ -114,7 +114,7 @@ export function useRealtimeConnection() {
           });
         }
       } catch {}
-    }, 15000); // Poll every 15 seconds
+    }, 10000); // Poll every 10 seconds for real-time updates
   }, [accessToken, isOnline, isSimulatingOffline, addNotification]);
 
   useEffect(() => {
